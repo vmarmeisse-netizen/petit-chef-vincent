@@ -6,9 +6,29 @@
 <title>Petit Chef Vincent</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Georgia,serif;background:#FDF6EC}
-.screen{display:none;min-height:100vh;flex-direction:column}
+body{font-family:Georgia,serif;background:#3E2008;display:flex;justify-content:center}
+.screen{display:none;min-height:100vh;flex-direction:column;width:100%;max-width:480px;background:#FDF6EC}
 .screen.on{display:flex}
+/* JEU OVERLAY */
+.jeu-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;padding:20px}
+.jeu-overlay.on{display:flex}
+.jeu-box{background:#FDF6EC;border-radius:20px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto}
+.jeu-titre{font-size:1.1rem;font-weight:bold;color:#3E2008;text-align:center;margin-bottom:6px}
+.jeu-sous{font-size:0.82rem;color:#6B3A2A;text-align:center;margin-bottom:10px}
+.jeu-scene{font-size:3rem;text-align:center;margin:10px 0}
+.jeu-vie{font-size:1.3rem;text-align:center;margin-bottom:8px}
+.jeu-question{font-size:0.95rem;font-weight:bold;color:#3E2008;margin-bottom:12px;line-height:1.4}
+.jeu-rep{width:100%;background:#FDF6EC;border:2px solid #C49A6C;color:#3E2008;padding:10px 13px;border-radius:12px;margin-bottom:6px;cursor:pointer;text-align:left;font-family:inherit;font-size:0.87rem}
+.jeu-rep.ok{background:#4CAF50!important;color:white!important;border-color:#388E3C!important}
+.jeu-rep.ko{background:#e53935!important;color:white!important;border-color:#b71c1c!important}
+.jeu-msg{font-size:0.9rem;color:#3E2008;margin-top:8px;min-height:24px;text-align:center;font-style:italic}
+.jeu-score{font-size:2rem;font-weight:bold;color:#3E2008;text-align:center;margin:8px 0}
+.jeu-btn{display:block;width:100%;background:#C49A6C;color:white;border:none;border-radius:20px;padding:12px;font-family:inherit;font-size:0.9rem;cursor:pointer;margin-top:10px}
+.jeu-fermer{display:block;width:100%;background:#f5e6d0;border:2px solid #C49A6C;color:#6B3A2A;border-radius:12px;padding:10px;font-family:inherit;font-size:0.85rem;cursor:pointer;margin-top:8px}
+/* POUR ALLER PLUS LOIN */
+.pal-item{background:#FDF6EC;border:2px solid #C49A6C;border-radius:14px;padding:14px;margin-bottom:8px;cursor:pointer}
+.pal-item h4{font-size:0.9rem;color:#3E2008;margin-bottom:4px}
+.pal-item p{font-size:0.8rem;color:#6B3A2A;line-height:1.4}
 /* ACCUEIL */
 .home-header{background:linear-gradient(160deg,#3E2008,#6B3A2A);padding:24px 20px 20px;text-align:center}
 .home-avatar{width:100px;height:100px;border-radius:50%;border:4px solid #C49A6C;overflow:hidden;margin:0 auto 10px}
@@ -185,6 +205,8 @@ body{font-family:Georgia,serif;background:#FDF6EC}
     <div style="background:white;border:2px solid #C49A6C;border-radius:18px;padding:16px;margin-bottom:16px"><div id="dictee-zone"></div></div>
     <span class="sec-lbl">👨‍🍳 Mode guidé audio — Je pâtisse !</span>
     <div class="guide-box"><div id="guide-zone"></div></div>
+    <span class="sec-lbl">🚀 Pour aller plus loin</span>
+    <div id="pal-zone" style="margin-bottom:16px"></div>
     <span class="sec-lbl">🎵 Musique d'époque</span>
     <button class="musique-btn" id="musique-btn" onclick="toggleMusique()">🎵 Écouter la musique d'époque</button>
     <div id="player-zone"></div>
@@ -594,16 +616,36 @@ let maleVoice=null;
   if(!window.speechSynthesis)return;
   const find=()=>{
     const vs=window.speechSynthesis.getVoices();
-    maleVoice=vs.find(v=>v.name==='Thomas')||vs.find(v=>/thomas|nicolas|pierre|bruno/i.test(v.name))||vs.find(v=>v.lang==='fr-FR')||vs.find(v=>v.lang.startsWith('fr'))||null;
+    if(!vs||vs.length===0)return;
+    // Priorité 1 : voix explicitement masculines françaises (macOS/iOS)
+    const explicitement=vs.find(v=>/thomas|nicolas|pierre|bruno|jean|paul|henri/i.test(v.name)&&v.lang.startsWith('fr'));
+    if(explicitement){maleVoice=explicitement;return;}
+    // Priorité 2 : voix Google fr-FR index 1 (souvent masculine sur Android)
+    const frVoices=vs.filter(v=>v.lang==='fr-FR');
+    // Sur Android, "Google français" index 1 est parfois masculine
+    const googleMale=frVoices.find(v=>/google/i.test(v.name)&&/male|man|homme/i.test(v.name));
+    if(googleMale){maleVoice=googleMale;return;}
+    // Priorité 3 : on prend la 2e voix fr-FR si elle existe (souvent différente)
+    if(frVoices.length>1){maleVoice=frVoices[1];return;}
+    // Priorité 4 : n'importe quelle voix fr-FR, on forcera le pitch bas
+    if(frVoices.length>0){maleVoice=frVoices[0];return;}
+    // Fallback : première voix française
+    maleVoice=vs.find(v=>v.lang.startsWith('fr'))||null;
   };
-  find(); window.speechSynthesis.onvoiceschanged=find;
+  find();
+  window.speechSynthesis.onvoiceschanged=find;
+  // Sur Android Chrome les voix chargent en asynchrone, on retente
+  setTimeout(find,500);
+  setTimeout(find,1500);
 })();
 
 function speak(text,btn){
   if(!window.speechSynthesis)return;
   window.speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text.replace(/\n/g,' ').replace(/•/g,''));
-  u.lang='fr-FR'; u.rate=0.88; u.pitch=0.82;
+  u.lang='fr-FR';
+  u.rate=0.85;
+  u.pitch=0.75; // pitch bas = voix masculine, même si la voix de base est féminine
   if(maleVoice)u.voice=maleVoice;
   if(btn){btn.textContent='⏸ En cours…';btn.disabled=true;}
   u.onend=()=>{if(btn){btn.textContent='🔊 Écouter';btn.disabled=false;}};
@@ -622,7 +664,7 @@ function openRecette(id){
   const qb=document.getElementById('quick-btns'); qb.innerHTML='';
   r.questions.forEach(q=>{const b=document.createElement('button');b.className='qbtn';b.textContent=q.t;b.onclick=()=>sendTo(q.q);qb.appendChild(b);});
   document.getElementById('chat-zone').innerHTML='';
-  renderQuiz(); renderDictee(); renderGuide();
+  renderQuiz(); renderDictee(); renderGuide(); renderPAL();
   const mb=document.getElementById('musique-btn');
   if(mb){mb.textContent='🎵 Écouter la musique d\'époque';}
   document.getElementById('player-zone').innerHTML='';
@@ -673,7 +715,7 @@ function lireQuestion(){
   const texte=q.q+'. '+q.r.map((r,i)=>String.fromCharCode(65+i)+'. '+r).join('. ');
   window.speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(texte);
-  u.lang='fr-FR';u.rate=0.88;u.pitch=0.82;
+  u.lang='fr-FR';u.rate=0.85;u.pitch=0.75;
   if(maleVoice)u.voice=maleVoice;
   window.speechSynthesis.speak(u);
 }
@@ -707,7 +749,7 @@ function lirePhrase(texte,idx){
   const t=document.getElementById('dictee-txt');
   if(t)t.textContent='📝 '+texte;
   const u=new SpeechSynthesisUtterance(texte);
-  u.lang='fr-FR';u.rate=0.78;u.pitch=0.82;
+  u.lang='fr-FR';u.rate=0.78;u.pitch=0.75;
   if(maleVoice)u.voice=maleVoice;
   window.speechSynthesis.speak(u);
 }
@@ -719,7 +761,7 @@ async function lireTout(){
   for(let i=0;i<d.phrases.length;i++){
     if(!dicteeEnCours)break;
     if(t)t.textContent='📝 '+d.phrases[i];
-    await new Promise(res=>{const u=new SpeechSynthesisUtterance(d.phrases[i]);u.lang='fr-FR';u.rate=0.78;u.pitch=0.82;if(maleVoice)u.voice=maleVoice;u.onend=res;u.onerror=res;window.speechSynthesis.speak(u);});
+    await new Promise(res=>{const u=new SpeechSynthesisUtterance(d.phrases[i]);u.lang='fr-FR';u.rate=0.78;u.pitch=0.75;if(maleVoice)u.voice=maleVoice;u.onend=res;u.onerror=res;window.speechSynthesis.speak(u);});
     await new Promise(r=>setTimeout(r,1500));
   }
   if(t&&dicteeEnCours)t.textContent='✅ Dictée terminée !';
@@ -819,7 +861,47 @@ function renderCarnet(){
 function resetCarnet(){if(confirm('Effacer tout le carnet ?')){try{localStorage.removeItem('carnet');}catch(e){}renderCarnet();}}
 
 
-// ══ MINI-JEUX ══
+// ══ POUR ALLER PLUS LOIN ══
+const PAL = {
+  savillum: [
+    {emoji:'🏛️', titre:'Le Sénat romain — Cicéron t\'interroge', texte:'Cicéron, le plus grand orateur de Rome, te pose des questions sur la République romaine. Sauras-tu lui répondre ?', prompt:'Tu es Cicéron, orateur romain du 1er siècle av. J.-C. Tu interroges un enfant curieux sur la Rome antique, la République, le Sénat et la vie quotidienne. Réponds en Cicéron bienveillant, en 2-3 phrases avec des émojis.'},
+    {emoji:'🗡️', titre:'Une journée de gladiateur', texte:'Comment vivait un gladiateur ? Que mangeait-il ? Comment s\'entraînait-il ? Petit Chef Vincent t\'emmène dans l\'arène !', prompt:'Tu es Petit Chef Vincent qui explique à un enfant de 7-10 ans la vie quotidienne d\'un gladiateur romain : entraînement, nourriture, arène. Réponds en 2-3 phrases enthousiastes avec des émojis.'},
+    {emoji:'🏺', titre:'Les ingrédients de la Rome antique', texte:'Fromage de brebis, miel, laurier... D\'où venaient ces ingrédients ? Comment les Romains faisaient-ils leurs courses ?', prompt:'Tu es Petit Chef Vincent. Explique à un enfant de 7-10 ans d\'où venaient les ingrédients du savillum dans la Rome antique : le fromage, le miel, la farine. Réponds en 2-3 phrases avec des émojis.'}
+  ],
+  dulcia: [
+    {emoji:'🌴', titre:'La route des épices — voyage de Bagdad', texte:'Les dattes venaient de très loin ! Suis la route des caravanes qui reliait l\'Afrique, l\'Arabie et Rome.', prompt:'Tu es Petit Chef Vincent. Raconte à un enfant de 7-10 ans le voyage des dattes depuis les oasis d\'Arabie jusqu\'à Rome via les caravanes. Réponds en 2-3 phrases avec des émojis.'},
+    {emoji:'🛋️', titre:'Un banquet romain — tu es invité !', texte:'Triclinium, gustatio, cena... Tu es invité chez un riche Romain ! Comment te comportes-tu à table ?', prompt:'Tu es Petit Chef Vincent. Décris à un enfant de 7-10 ans comment se passait un banquet dans la Rome antique : les divans, les services, les règles de politesse. Réponds en 2-3 phrases avec des émojis.'},
+    {emoji:'📜', titre:'Apicius — le premier chef cuisinier de l\'Histoire', texte:'Apicius a écrit le plus vieux livre de cuisine du monde. Que contenait ce livre mystérieux ?', prompt:'Tu es Petit Chef Vincent. Parle à un enfant de 7-10 ans d\'Apicius et de son livre de cuisine "De re coquinaria", le plus vieux livre de recettes connu. Réponds en 2-3 phrases enthousiastes avec des émojis.'}
+  ],
+  faludhaj: [
+    {emoji:'🌙', titre:'Shéhérazade — tu inventes la fin du conte', texte:'Dans les Mille et Une Nuits, Shéhérazade raconte des histoires pour ne pas mourir. Et si tu inventais la suite ?', prompt:'Tu es Petit Chef Vincent. Commence une mini-histoire dans le style des Mille et Une Nuits pour un enfant de 7-10 ans, avec un cuisinier magique à Bagdad. Fais 3-4 phrases poétiques avec des émojis et laisse l\'histoire ouverte.'},
+    {emoji:'📚', titre:'La bibliothèque de Bagdad', texte:'Au IXe siècle, Bagdad avait la plus grande bibliothèque du monde. Des milliers de livres venus de partout !', prompt:'Tu es Petit Chef Vincent. Explique à un enfant de 7-10 ans ce qu\'était la Maison de la Sagesse de Bagdad au IXe siècle : les livres, les savants, les traductions. Réponds en 2-3 phrases avec des émojis.'},
+    {emoji:'✨', titre:'Le safran — l\'or rouge de la cuisine', texte:'Le safran est l\'épice la plus chère du monde ! Pourquoi ? D\'où vient-il ? Comment le récolte-t-on ?', prompt:'Tu es Petit Chef Vincent. Explique à un enfant de 7-10 ans pourquoi le safran est si précieux : la récolte des fleurs, la quantité nécessaire, son histoire à Bagdad. Réponds en 2-3 phrases avec des émojis.'}
+  ]
+};
+
+function renderPAL(){
+  const z=document.getElementById('pal-zone');
+  if(!z||!currentId||!PAL[currentId])return;
+  z.innerHTML=PAL[currentId].map((item,i)=>`
+    <div class="pal-item" onclick="ouvrirPAL(${i})">
+      <h4>${item.emoji} ${item.titre}</h4>
+      <p>${item.texte}</p>
+    </div>`).join('');
+}
+
+async function ouvrirPAL(idx){
+  const item=PAL[currentId][idx];
+  if(!item)return;
+  // On envoie le prompt dans le chat
+  document.getElementById('rec-content').scrollTop=0;
+  window.scrollTo(0,0);
+  const chatZone=document.getElementById('chat-zone');
+  chatZone.scrollIntoView({behavior:'smooth'});
+  await sendTo(item.prompt);
+}
+
+
 const JEUX = {
   savillum: {
     titre: "⚔️ L'Arène des Gladiateurs !",
